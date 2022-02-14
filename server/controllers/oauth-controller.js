@@ -1,7 +1,9 @@
 const config = require('./config').Config;
-const Issuer = require('openid-client').Issuer
+const { Issuer, custom} = require('openid-client')
 const { uuid } = require('uuidv4');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require("path");
 const TokenService = require('../services/oauth/tokenService');
 const HTTPUtil = require('../services/httputil');
 const resourceClient = new HTTPUtil(config.resourceBase);
@@ -12,15 +14,41 @@ class OAuthController {
 
     constructor(scope) {
         this._scope = scope;
+        this._jwks = null;
+        this._cert = null;
+        this._key = null;
+        
+        try {
+            const data = fs.readFileSync(path.resolve(__dirname, `../../config/jwks.json`), 'utf8');
+            this._jwks = { "keys": JSON.parse(data) };
+        } catch (err) {
+            console.error(err);
+        }
+        
+        try {
+            this._cert = fs.readFileSync(path.resolve(__dirname, "../../config/cert.pem"), 'utf8');
+        } catch (err) {
+            console.error(err);
+        }
+
+        try {
+            this._key = fs.readFileSync(path.resolve(__dirname, `../../config/key.pem`), 'utf8');
+        } catch (err) {
+            console.error(err);
+        }
     }
 
     authorize = async (req, res) => {
+
+        this._oidcIssuer = await Issuer.discover(config.discoveryUrl);
+        console.log('Discovered issuer %s %O', this._oidcIssuer.issuer, this._oidcIssuer.metadata);
 
         // lodge an intent first
         let intentID = "";
 
         try {
-            let intentData = await this._lodgeIntent(req, res);
+            let intentData = await this._lodgeIntent(req, res, this._oidcIssuer.metadata.issuer);
+            console.log(`DEBUG: intentData=${JSON.stringify(intentData)}`)
             intentID = intentData.ConsentId;
             if (intentID == "") {
                 res.send("Unable to lodge the intent though some data was returned");
@@ -32,90 +60,59 @@ class OAuthController {
             return;
         }
 
-        this._oidcIssuer = await Issuer.discover(config.discoveryUrl);
-        console.log('Discovered issuer %s %O', this._oidcIssuer.issuer, this._oidcIssuer.metadata);
+        this._client = new this._oidcIssuer.FAPI1Client({
+            client_id: config.clientId,
+            client_secret: config.clientSecret,
+            redirect_uris: [config.redirectUri],
+            response_types: ['code'],
+            token_endpoint_auth_method: (config.mtlsOrJWT == "mtls") ? 'tls_client_auth' : "private_key_jwt",
+            token_endpoint_auth_signing_alg: 'RS256',
+            tls_client_certificate_bound_access_tokens: config.certBound,
+            id_token_signed_response_alg: 'RS256',
+        }, this._jwks);
 
-        let url = ""
-        if (config.usePar != "true") {
-            this._client = new this._oidcIssuer.Client({
-                client_id: config.clientId,
-                client_secret: config.clientSecret,
-                redirect_uris: [config.redirectUri],
-                response_types: ['code'],
-                token_endpoint_auth_method: 'client_secret_post',
-            });
-    
-            url = this._client.authorizationUrl({
-                scope: config.scope,
-                state: uuid(),
-                claims: {
-                    "userinfo": {
-                        "openbanking_intent_id": { "value": intentID, "essential": true }
-                    },
-                    "id_token": {
-                        "openbanking_intent_id": { "value": intentID, "essential": true }
-                    }
-                }
-            });
-        } else {
-            // generated from https://mkjwk.org/
-            var keys = {
-                "keys": [
-                    {
-                        "p": "z1Mklvta_Kw1q79PMhK7nHGVMIToyx9YPKjECQCAaDo02xCZCOBz-Tnv6NTwwsdoHKU4CjSf7TdD7_zpTaieyIkPRXPnMlSCMt626fD58EnIwvKJtTCwzHz8dbt7lH6ihq4xD4NNbE2xUiP6HjKGWyUM6RuNRSpfXPbEAmbslpU",
-                        "kty": "RSA",
-                        "q": "xH0o7t617m4Ec5lD2gMcFDH_VuNI-p2RvDAF60pOA-NRryJhwqJkbTCAeUAeaybh1Cv3cB3Tdl-10OpriS5rl62vmhVZUwaUhGstjwTUUBTTRkl7vIEwHWvWXtcpHaxbP2DV11OJhToAndbcVvAoOCmYKRtasbmlVletM9T9Nj8",
-                        "d": "k5r2JrDPCL5mBoTlfOPb1P45scJyXVF5ynLqfQX8hGhhYgvtg3AnTEzqbnTUdzSoMzIv0PUW6p1UGtw6AUL_Ts6bLL1xivgOIBKK1mmt0x9avl1JcpewELTT81FQ8f4E0ORXB-m9ZNYUhjH7Rs5hTI7zddnKQ5XJxMykSoEDjIdym-aptmUh0Y8UczQakSTkjopyZqQPu2vl4BMXxpXvj9pTaBRb_wG7vOdibdGlAnNRZosER5o7aK0o_bRwSeGEAQs-5A9AvJFt1twMJMEAowzih8r_fas0OXJ1dbs_QZfx35wqJ8MqwOImXLnoDxjOd2WAVc1hwCjkVpWUjki1aQ",
-                        "e": "AQAB",
-                        "use": "sig",
-                        "kid": "demojwtsigner",
-                        "qi": "b8cxjehpQBHuFGLJ1sbkvxwNR1YZZnn3T5biH6KtZG2WWHBGs4596_4Iy8NRiRnRLc4fnKiVKyVVBvXZgpl7CtR50tYy0HMidVgU4TCNF7F50q03Hfq42AGypvBYeHZMtSKGbpwKWLgjBG-pEbjlkKIkceTG5cLITr7EuO0EAQs",
-                        "dp": "hwoRuCHqZs_IeaC3ddcLyl-VHDBF7R_yejg2z-I6wSjAirup4kVIZNoe8NnaJBR8NMRM1yDl1j38C1IBqGqfWeEkSEmxGnA_CeFU5NXoBmIY2RnfJlybm-YBDrJaUSOWuwC0xfTxNgz45Za3cHnaV32vhhpDDv0FdmjozOO7UG0",
-                        "alg": "RS256",
-                        "dq": "cm-WnHBXMzMeIplb3Cg9fUGVPeyHv3Zvv1OUzvFquHb3RvHWT_42USWTXYrLbIqrsd-db83fL60UfkVZNf80KJW-lRXj_Sfy7aBiW05rvOw0FFaN2z6-YBRDON9FEgQk7KegQ5VinZYnb8YIdBXQxszq0t4cly_RLJVJycs9Yg8",
-                        "n": "nyEEwueLcSFRUSPdy9AL5Vf6X7QDuL8mFMOR2liM1LeluSHCSYIoN-h6xxMkwDfr6626EOhJVxMxeBuLaG-_3QWWjvicUdIpevj73U1jqQT7MaMPI3ms7rm0v1OHfabyLbrCjDniL_8Ym15H_RwVqF31kXIcKVqMtJWRWkeoOrSSqUq4h28rRDUi8HXUTAvSoQYnZ-J-sICME7G-ZYVJtIQObT6AjMuM_y54vCH8ViVE9aOQ2rV3Wi-TKEgiV9Ik1KB6EdzCB4CYK2HYy_OgheF0ggeWuwHOegBpVR4BqlQyZJKJyhKhWZhfYHmWkm_V-7KZtrWHoVQ_NhOAcT18qw"
-                    }
-                ]
+        var clientAssertionPayload = null
+        if (config.mtlsOrJWT != "mtls") {
+            let aud = this._oidcIssuer.metadata.token_endpoint;
+            /*
+            if (this._oidcIssuer.metadata.mtls_endpoint_aliases) {
+                aud = this._oidcIssuer.metadata.mtls_endpoint_aliases.token_endpoint;
             }
-            
-            this._client = new this._oidcIssuer.FAPI1Client({
-                client_id: config.clientId,
-                client_secret: config.clientSecret,
-                redirect_uris: [config.redirectUri],
-                response_types: ['code'],
-                token_endpoint_auth_method: 'private_key_jwt',
-                token_endpoint_auth_signing_alg: 'RS256',
-                tls_client_certificate_bound_access_tokens: false,
-                id_token_signed_response_alg: 'RS256',
-            }, keys);
-
-            // build JWT
-            let parData = await this._client.pushedAuthorizationRequest({
-                scope: config.scope,
-                state: uuid(),
-                claims: {
-                    "userinfo": {
-                        "openbanking_intent_id": { "value": intentID, "essential": true }
-                    },
-                    "id_token": {
-                        "openbanking_intent_id": { "value": intentID, "essential": true }
-                    }
-                },
-            }, {
-                clientAssertionPayload: { 
-                    sub: config.clientId, 
-                    iss: config.clientId,
-                    jti: uuid(),
-                    iat: new Date().getTime()/1000,
-                    exp: (new Date().getTime() + 30 * 60 * 1000)/1000,
-                    aud: this._oidcIssuer.metadata.token_endpoint,
-                },
-            });
-
-            url = this._client.authorizationUrl({
-                request_uri: parData.request_uri,
-            });
+            */
+            clientAssertionPayload = { 
+                sub: config.clientId, 
+                iss: config.clientId,
+                jti: uuid(),
+                iat: new Date().getTime()/1000,
+                exp: (new Date().getTime() + 30 * 60 * 1000)/1000,
+                aud: aud,
+            }
         }
+
+        if (config.certBound || config.mtlsOrJWT == "mtls") {
+            const key = this._key;
+            const cert = this._cert;
+            this._client[custom.http_options] = () => ({ key, cert });
+        }
+        
+        let parData = await this._client.pushedAuthorizationRequest({
+            scope: config.scope,
+            state: uuid(),
+            claims: {
+                "userinfo": {
+                    "openbanking_intent_id": { "value": intentID, "essential": true }
+                },
+                "id_token": {
+                    "openbanking_intent_id": { "value": intentID, "essential": true }
+                }
+            },
+        }, {
+            clientAssertionPayload: clientAssertionPayload,
+        });
+
+        let url = this._client.authorizationUrl({
+            request_uri: parData.request_uri,
+        });
         
         res.redirect(url)
     }
@@ -123,14 +120,18 @@ class OAuthController {
     aznCallback = async (req, res) => {
         const params = this._client.callbackParams(req);
         var clientAssertionPayload = null
-        if (config.usePar == "true") {
+        if (config.mtlsOrJWT != "mtls") {
+            let aud = this._oidcIssuer.metadata.token_endpoint;
+            if (this._oidcIssuer.metadata.mtls_endpoint_aliases) {
+                aud = this._oidcIssuer.metadata.mtls_endpoint_aliases.token_endpoint;
+            }
             clientAssertionPayload = { 
                 sub: config.clientId, 
                 iss: config.clientId,
                 jti: uuid(),
                 iat: new Date().getTime()/1000,
                 exp: (new Date().getTime() + 30 * 60 * 1000)/1000,
-                aud: this._oidcIssuer.metadata.token_endpoint,
+                aud: aud,
             }
         }
         const tokenSet = await this._client.callback(config.redirectUri, params, {
@@ -182,9 +183,9 @@ class OAuthController {
         res.redirect('https://' + config.tenantUrl + '/idaas/mtfim/sps/idaas/logout?redirectUrl=' + encodeURIComponent(req.protocol + '://' + host) + "&themeId=" + config.themeId);
     }
 
-    _lodgeIntent = async (req, res) => {
+    _lodgeIntent = async (req, res, issuer) => {
         let tokenData = await tokenService.getToken('payment')
-        console.log(`DEBUG: tokenData=${JSON.stringify(tokenData)}`);
+        console.log(`DEBUG: issuer=${issuer}, tokenData=${JSON.stringify(tokenData)}`);
 
         let response = await resourceClient.post('/domestic-payments', {
                 "type": "payment_initiation",
