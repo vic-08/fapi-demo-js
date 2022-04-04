@@ -23,7 +23,10 @@ You can run this in multiple modes, where you vary the client authentication opt
 This guide will provide a prescriptive configuration but you can vary this:
 
 1. `private_key_jwt` used
-2. Certificate bound access tokens enabled
+2. Certificate bound access tokens disabled
+
+> :exclamation: You need a custom domain on your Verify tenant that is configured with the CA bundle provided by your PKI that would issue the client certificate.
+> Given this isn't available for trial tenants, the instructions here disable this option. However, if you do have a custom domain available and configured, enable this option.
 
 ### Set up the transaction type
 
@@ -46,24 +49,22 @@ Once created, the summary view would look as below.
 
 ### Configure IBM Security Verify
 
-1. Determine if you can get a valid client certificate. If you don't have a PKI configured on your tenant, set `CERT_BOUND` as `false` in the environment file on the application (see below)  or reach out to the IBM Security Verify support team for a demo certificate.
+1. Login to the Verify admin console
 
-2. Login to the Verify admin console
+2. Go to Applications > Applications in the navigation panel and click on "Add Application"
 
-3. Go to Applications > Applications in the navigation panel and click on "Add Application"
+3. Search for "OpenID Connect for Open Banking" and choose the connector. Click "Add Application"
 
-4. Search for "OpenID Connect for Open Banking" and choose the connector. Click "Add Application"
+4. Enter the general information and switch to the "Sign On" tab
 
-5. Enter the general information and switch to the "Sign On" tab
-
-6. Choose the following:
+5. Choose the following:
     - `Authorization code` grant type allowed
     - `private_key_jwt` client authentication method
     - Enforce pushed authorization request
     - Enable "certificate bound access token" if you have a certificate. If you don't, do not enable this
     - Choose "PS256" as the signature algorithm
 
-7. Under Endpoint Configuration, click on the edit icon next to "Authorize". Choose "Edit" next to "Open Banking Intent ID" and copy/paste the following code snippet.
+6. Under Endpoint Configuration, click on the edit icon next to "Authorize". Choose "Edit" next to "Open Banking Intent ID" and copy/paste the following code snippet.
 
     ```yaml
     statements:
@@ -86,17 +87,17 @@ Once created, the summary view would look as below.
         }
     ```
 
-8. Choose the identity sources and access policy, as desired.
+7. Choose the identity sources and access policy, as desired.
 
-9. Select "Ask for consent" for User Consent
+8. Select "Ask for consent" for User Consent
 
-10. Save and set "Automatic access for all users and groups" under the Entitlements tab
+9. Save and set "Automatic access for all users and groups" under the Entitlements tab
 
-11. Switch to the Privacy tab and add `Open Banking payment` from the list of purposes allowed for the application.
+10. Switch to the Privacy tab and add `Open Banking payment` from the list of purposes allowed for the application.
 
-12. Switch to API access tab and add a new API client (you may name it anything you like). Either uncheck "Restrict custom scopes" or add `payment` to the allowed scopes. These client credentials are designated `API_CLIENT_ID` and `API_CLIENT_SECRET`.
+11. Switch to API access tab and add a new API client (you may name it anything you like). Either uncheck "Restrict custom scopes" or add `payment` to the allowed scopes. These client credentials are designated `API_CLIENT_ID` and `API_CLIENT_SECRET`.
 
-13. Generate a jwks containing the private key and obtain a public cert. Upload the public cert into "Security" > "Certificates" under "Signer certificates"
+12. Generate a jwks containing the private key and obtain a public cert. Upload the public cert into "Security" > "Certificates" under "Signer certificates"
     - You can use a tool like [mkjwk](https://mkjwk.org/) for the purposes to testing this app. Use `PS256` as the algorithm. Copy the public and private keypair into the app's config directory - `config/jwks.json`. Download the self-signed certificate as a PEM file and upload it to Verify as described.
 
 ### Setup the application
@@ -108,7 +109,7 @@ Once created, the summary view would look as below.
     - `CLIENT_SECRET`: The OIDC client secret generated in the Sign On tab of the application
     - `SCOPE`: If you aren't sure what to set here, just set this as `openid profile`
     - `MTLS_OR_JWT`: Set this to `jwt`
-    - `CERT_BOUND`: Set this to true if you were able to get a client certificate. Otherwise, set it to false.
+    - `CERT_BOUND`: Set this to true if you have a custom domain configured to perform mTLS and have an issued client certificate that you can use with this application
     - `API_CLIENT_ID`: The OAuth client ID generated for the API client under the application's API Access tab
     - `API_CLIENT_SECRET`: The OAuth client secret generated for the API client under the application's API Access tab
     - `RESOURCE_BASE_URL`: Leave this unchanged
