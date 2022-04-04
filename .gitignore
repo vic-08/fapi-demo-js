@@ -75,6 +75,7 @@ typings/
 config/cert.pem
 config/key.pem
 config/jwks.json
+dotenv.*
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -106,3 +107,5 @@ dist
 
 # TernJS port file
 .tern-port
+
+**/.DS_Store

@@ -1,5 +1,5 @@
 const config = require('./config').Config;
-const { Issuer, custom} = require('openid-client')
+const { Issuer, custom, generators } = require('openid-client')
 const { uuid } = require('uuidv4');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
@@ -48,7 +48,6 @@ class OAuthController {
 
         try {
             let intentData = await this._lodgeIntent(req, res, this._oidcIssuer.metadata.issuer);
-            console.log(`DEBUG: intentData=${JSON.stringify(intentData)}`)
             intentID = intentData.ConsentId;
             if (intentID == "") {
                 res.send("Unable to lodge the intent though some data was returned");
@@ -56,19 +55,22 @@ class OAuthController {
             }
         } catch (e) {
             console.error("Error occurred while trying to lodge the intent; " + e);
+            console.error(e.stack);
             res.send("Unable to lodge the intent");
             return;
         }
 
+        const code_verifier = generators.codeVerifier();
+        const code_challenge = generators.codeChallenge(code_verifier);
         this._client = new this._oidcIssuer.FAPI1Client({
             client_id: config.clientId,
             client_secret: config.clientSecret,
             redirect_uris: [config.redirectUri],
             response_types: ['code'],
             token_endpoint_auth_method: (config.mtlsOrJWT == "mtls") ? 'tls_client_auth' : "private_key_jwt",
-            token_endpoint_auth_signing_alg: 'RS256',
+            token_endpoint_auth_signing_alg: 'PS256',
             tls_client_certificate_bound_access_tokens: config.certBound,
-            id_token_signed_response_alg: 'RS256',
+            id_token_signed_response_alg: 'PS256',
         }, this._jwks);
 
         var clientAssertionPayload = null
@@ -95,7 +97,7 @@ class OAuthController {
             this._client[custom.http_options] = () => ({ key, cert });
         }
         
-        let parData = await this._client.pushedAuthorizationRequest({
+        let parReqData = {
             scope: config.scope,
             state: uuid(),
             claims: {
@@ -106,13 +108,26 @@ class OAuthController {
                     "openbanking_intent_id": { "value": intentID, "essential": true }
                 }
             },
-        }, {
+        };
+
+        console.log(`PAR request\n${JSON.stringify(parReqData, null, 2)}\n`)
+
+        let parData = await this._client.pushedAuthorizationRequest(parReqData, {
             clientAssertionPayload: clientAssertionPayload,
         });
 
+        console.log(`PAR response\n${JSON.stringify(parData, null, 2)}\n`);
+
         let url = this._client.authorizationUrl({
             request_uri: parData.request_uri,
+            code_challenge,
+            code_challenge_method: 'S256',
         });
+
+        console.log(`Redirecting the browser to: ${url}\n`);
+
+        req.session.codeVerifier = code_verifier;
+        req.session.save();
         
         res.redirect(url)
     }
@@ -134,13 +149,15 @@ class OAuthController {
                 aud: aud,
             }
         }
+
+        console.log(`Validating with PKCE code verifier: ${req.session.codeVerifier}`);
         const tokenSet = await this._client.callback(config.redirectUri, params, {
-            state: params.state
+            state: params.state,
+            code_verifier: req.session.codeVerifier,
         }, {
             clientAssertionPayload: clientAssertionPayload,
         });
-        console.log('received and validated tokens %j', tokenSet);
-        console.log('validated ID Token claims %j', tokenSet.claims());
+        console.log(`Received and validated tokens\n${JSON.stringify(tokenSet, null, 2)}\n`); 
 
         req.session.authToken = tokenSet;
         req.session.token = tokenSet;
@@ -185,34 +202,37 @@ class OAuthController {
 
     _lodgeIntent = async (req, res, issuer) => {
         let tokenData = await tokenService.getToken('payment')
-        console.log(`DEBUG: issuer=${issuer}, tokenData=${JSON.stringify(tokenData)}`);
+        console.log(`Obtained token using 'client_credentials' grant flow:\n${JSON.stringify(tokenData, null, 2)}\n`);
 
-        let response = await resourceClient.post('/domestic-payments', {
-                "type": "payment_initiation",
-                "actions": [
-                    "initiate",
-                    "status",
-                    "cancel"
-                ],
-                "locations": [
-                    "https://example.com/payments"
-                ],
-                "instructedAmount": {
-                    "currency": "EUR",
-                    "amount": "123.50"
-                },
-                "creditorName": "Merchant A",
-                "creditorAccount": {
-                    "iban": "DE02100100109307118603"
-                },
-                "remittanceInformationUnstructured": "Ref Number Merchant"
-            }, {
+        const lodgeData = {
+            "type": "payment_initiation",
+            "actions": [
+                "initiate",
+                "status",
+                "cancel"
+            ],
+            "locations": [
+                "https://example.com/payments"
+            ],
+            "instructedAmount": {
+                "currency": "EUR",
+                "amount": "123.50"
+            },
+            "creditorName": "Merchant A",
+            "creditorAccount": {
+                "iban": "DE02100100109307118603"
+            },
+            "remittanceInformationUnstructured": "Ref Number Merchant"
+        }
+
+        console.log(`Lodge an intent with the Bank\n${JSON.stringify(lodgeData, null, 2)}\n`);
+        let response = await resourceClient.post('/domestic-payments', lodgeData, {
                 "Accept": "application/json",
                 "tenant": config.tenantUrl,
                 "Authorization": "Bearer " + tokenData.access_token,
             });
 
-        console.log(`DEBUG: consentResult=${JSON.stringify(response.data)}`);
+        console.log(`Result of lodging an intent\n${JSON.stringify(response.data, null, 2)}\n`);
         return response.data;
     }
 

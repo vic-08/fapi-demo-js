@@ -40,9 +40,8 @@
                         <table class="bx--data-table bx--data-table--no-border">
                             <thead>
                                 <tr class="tab-dataTable-row">
-                                    <th style="width:30%;font-weight:bold;">Purpose/agreement</th>
-                                    <th style="width:15%;font-weight:bold;">Attribute</th>
-                                    <th style="width:15%;font-weight:bold;">Access type</th>
+                                    <th style="width:30%;font-weight:bold;">Action</th>
+                                    <th style="width:15%;font-weight:bold;">Intent ID</th>
                                     <th style="width:15%;font-weight:bold;">Current state</th>
                                     <th style="width:15%;font-weight:bold;text-align:right;">Consented on</th>
                                 </tr>
@@ -51,8 +50,7 @@
                                 {{#each consents}}
                                 <tr class="table-row">
                                     <td><span>{{formatPurpose this.purposeName this.purposeVersion}}</span></td>
-                                    <td><span>{{formatAttribute this.attributeName}}</span></td>
-                                    <td><span>{{formatAccessType this.accessTypeName}}</span></td>
+                                    <td><span>{{formatAttribute this.attributeValue}}</span></td>
                                     <td><span>{{formatState this.state}}</span></td>
                                     <td style="text-align:right;"><span>{{formatDate this.lastModifiedTime}}</span></td>
                                 </tr>

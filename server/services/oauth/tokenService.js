@@ -21,8 +21,8 @@ class TokenService {
 
     introspect = async (accessToken) => {
         const response = await httpClient.post('/oauth2/introspect', {
-            "client_id": config.clientId,
-            "client_secret": config.clientSecret,
+            "client_id": config.apiClientId,
+            "client_secret": config.apiClientSecret,
             "token": accessToken,
         }, {
             "content-type": "application/x-www-form-urlencoded",
