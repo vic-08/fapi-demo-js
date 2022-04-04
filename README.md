@@ -25,7 +25,7 @@ This guide will provide a prescriptive configuration but you can vary this:
 1. `private_key_jwt` used
 2. Certificate bound access tokens disabled
 
-> :exclamation: You need a custom domain on your Verify tenant that is configured with the CA bundle provided by your PKI that would issue the client certificate. Given this isn't available for trial tenants, the instructions here disable this option. However, if you do have a custom domain available and configured, enable this option.
+> **NOTE:** You need a custom domain on your Verify tenant that is configured with the CA bundle provided by your PKI that would issue the client certificate. Given this isn't available for trial tenants, the instructions here disable this option. However, if you do have a custom domain available and configured, enable this option.
 
 ### Set up the transaction type
 
