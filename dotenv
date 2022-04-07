@@ -1,5 +1,5 @@
 TENANT_URL=harbinger.verify.ibm.com
-DISCOVERY_URL=https://harbinger.verify.ibm.com/oidc/endpoint/default/.well-known/openid-configuration
+DISCOVERY_URL=https://harbinger.verify.ibm.com/oauth2/.well-known/openid-configuration
 CLIENT_ID=ed6e45c2-05d2-492c-a3dd-1f3813a4ef87
 CLIENT_SECRET=Zeiqv2WEsy
 REDIRECT_URI=http://localhost:3000/auth/callback
