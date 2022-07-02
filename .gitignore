@@ -72,9 +72,8 @@ typings/
 .env
 .env.test
 .env.*
-config/cert.pem
-config/key.pem
 config/jwks.json
+config/*.pem
 dotenv.*
 
 # parcel-bundler cache (https://parceljs.org/)
