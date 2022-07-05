@@ -69,18 +69,13 @@ class OAuthController {
             response_types: ['code'],
             token_endpoint_auth_method: (config.mtlsOrJWT == "mtls") ? 'tls_client_auth' : "private_key_jwt",
             token_endpoint_auth_signing_alg: 'PS256',
-            tls_client_certificate_bound_access_tokens: config.certBound,
+            tls_client_certificate_bound_access_tokens: (config.certBound == "true"),
             id_token_signed_response_alg: 'PS256',
         }, this._jwks);
 
         var clientAssertionPayload = null
         if (config.mtlsOrJWT != "mtls") {
-            let aud = this._oidcIssuer.metadata.token_endpoint;
-            /*
-            if (this._oidcIssuer.metadata.mtls_endpoint_aliases) {
-                aud = this._oidcIssuer.metadata.mtls_endpoint_aliases.token_endpoint;
-            }
-            */
+            let aud = this._oidcIssuer.metadata.issuer;
             clientAssertionPayload = { 
                 sub: config.clientId, 
                 iss: config.clientId,
@@ -91,9 +86,10 @@ class OAuthController {
             }
         }
 
-        if (config.certBound || config.mtlsOrJWT == "mtls") {
+        if (config.certBound == "true" || config.mtlsOrJWT == "mtls") {
             const key = this._key;
             const cert = this._cert;
+            console.log("DEBUG: I am here for some reason");
             this._client[custom.http_options] = () => ({ key, cert });
         }
         
