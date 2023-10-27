@@ -122,6 +122,12 @@ class OAuthController {
 
         console.log(`Redirecting the browser to: ${url}\n`);
 
+        req.session.currAction = "auth";
+        if (req.query.action && req.query.action == "pay") {
+            req.session.currAction = "pay";
+        } else {
+            req.session.payAuthIntentID = intentID;
+        }
         req.session.codeVerifier = code_verifier;
         req.session.save();
         
@@ -129,13 +135,16 @@ class OAuthController {
     }
 
     aznCallback = async (req, res) => {
+        console.log("Current action: " + req.session.currAction);
+        var isPay = false;
+        if (req.session.currAction && req.session.currAction == "pay") {
+            isPay = true;
+        }
+
         const params = this._client.callbackParams(req);
         var clientAssertionPayload = null
         if (config.mtlsOrJWT != "mtls") {
             let aud = this._oidcIssuer.metadata.token_endpoint;
-            if (this._oidcIssuer.metadata.mtls_endpoint_aliases) {
-                aud = this._oidcIssuer.metadata.mtls_endpoint_aliases.token_endpoint;
-            }
             clientAssertionPayload = { 
                 sub: config.clientId, 
                 iss: config.clientId,
@@ -155,8 +164,13 @@ class OAuthController {
         });
         console.log(`Received and validated tokens\n${JSON.stringify(tokenSet, null, 2)}\n`); 
 
-        req.session.authToken = tokenSet;
-        req.session.token = tokenSet;
+        if (isPay) {
+            req.session.trxAuthToken = tokenSet;
+            req.session.trxToken = tokenSet;
+        } else {
+            req.session.authToken = tokenSet;
+            req.session.token = tokenSet;
+        }
         req.session.save();
 
         // Extract redirect URL from querystring
@@ -200,28 +214,54 @@ class OAuthController {
         let tokenData = await tokenService.getToken('payment')
         console.log(`Obtained token using 'client_credentials' grant flow:\n${JSON.stringify(tokenData, null, 2)}\n`);
 
-        const lodgeData = {
-            "type": "payment_initiation",
-            "actions": [
-                "initiate",
-                "status",
-                "cancel"
-            ],
-            "locations": [
-                "https://example.com/payments"
-            ],
-            "instructedAmount": {
-                "currency": "EUR",
-                "amount": "123.50"
-            },
-            "creditorName": "Merchant A",
-            "creditorAccount": {
-                "iban": "DE02100100109307118603"
-            },
-            "remittanceInformationUnstructured": "Ref Number Merchant"
+        var isPay = false;
+        if (req.query.action && req.query.action == "pay") {
+            isPay = true;
         }
 
-        console.log(`Lodge an intent with the Bank\n${JSON.stringify(lodgeData, null, 2)}\n`);
+        var lodgeData;
+
+        if (isPay) {
+            lodgeData = {
+                "type": "payment_initiation",
+                "actions": [
+                    "initiate",
+                    "status",
+                    "cancel"
+                ],
+                "locations": [
+                    "https://example.com/payments"
+                ],
+                "instructedAmount": {
+                    "currency": req.query.currency,
+                    "amount": req.query.amount
+                },
+                "creditorName": "JKE eShop",
+                "creditorAccount": {
+                    "iban": "DE02100100109307118603"
+                },
+                "merchantAuthorizationId": req.session.payAuthIntentID
+            }
+            console.log(`Lodge an payment_initiation intent with the Bank\n${JSON.stringify(lodgeData, null, 2)}\n`);
+        } else {
+            lodgeData = {
+                "type": "merchant_auth",
+                "actions": [
+                    "initiate",
+                    "status",
+                    "cancel"
+                ],
+                "locations": [
+                    "https://example.com/payments"
+                ],
+                "creditorName": "JKE eShop",
+                "creditorAccount": {
+                    "iban": "DE02100100109307118603"
+                }
+            }
+            console.log(`Lodge an merchant_auth intent with the Bank\n${JSON.stringify(lodgeData, null, 2)}\n`);
+        }
+
         let response = await resourceClient.post('/domestic-payments', lodgeData, {
                 "Accept": "application/json",
                 "tenant": config.tenantUrl,
@@ -233,7 +273,11 @@ class OAuthController {
     }
 
     static isLoggedIn(req) {
-        return req.session != null && req.session.authToken != null && req.session.authToken != "";
+        return req.session != null && req.session.authToken != null && req.session.authToken != "" && (req.query.error == null || req.query.error != "dua_fail");
+    }
+
+    static isTransactionComplete(req) {
+        return req.session != null && req.session.authToken != null && req.session.authToken != "" && req.session.trxAuthToken != null && req.session.trxAuthToken != "";
     }
 
     static getAuthToken = (req) => {

@@ -8,9 +8,12 @@ const router = express.Router();
 
 // define routes
 router.get('/',  (req, res) => {
-    if (OAuthController.isLoggedIn(req)) {
-        console.log("[DEBUG] Logged in")
+    if (OAuthController.isTransactionComplete(req)) {
+        console.log("[DEBUG] Transaction complete")
         res.redirect('/users');
+    } else if (OAuthController.isLoggedIn(req)) {
+        console.log("[DEBUG] Logged in")
+        res.render('payment', {title: 'Verify OIDC Demo', signupEnabled: false, signupLink: config.signupLink })
     } else {
         console.log("[DEBUG] Not logged in")
         res.render('index', {title: 'Verify OIDC Demo', signupEnabled: config.signupLink != "", signupLink: config.signupLink })

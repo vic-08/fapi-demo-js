@@ -60,8 +60,8 @@ class UsersController {
         let dpcmClient = new Privacy(consentConfig, auth, {})
         dpcmClient.getUserConsents(auth).then(result => {
             // filter down to just the payment_initiation purpose
-            let consents = result.consents.filter(x => x.purposeId == 'payment_initiation');
-            console.log(`Consents for payment_initiation\n${JSON.stringify(consents, null, 2)}\n`)
+            let consents = result.consents.filter(x => x.attributeId == 35);
+            console.log(`Consents for open banking\n${JSON.stringify(consents, null, 2)}\n`)
             res.render('consents', { user: idTokenPayload, consents: consents, title: 'My Consents' });
         }).catch(err => {
             console.log("Error=" + err);
