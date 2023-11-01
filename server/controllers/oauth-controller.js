@@ -223,7 +223,7 @@ class OAuthController {
 
         if (isPay) {
             lodgeData = {
-                "type": "payment_initiation",
+                "type": "payment_transaction",
                 "actions": [
                     "initiate",
                     "status",
@@ -236,7 +236,7 @@ class OAuthController {
                     "currency": req.query.currency,
                     "amount": req.query.amount
                 },
-                "creditorName": "JKE eShop",
+                "creditorName": "TrustMe Shop",
                 "creditorAccount": {
                     "iban": "DE02100100109307118603"
                 },
@@ -245,7 +245,7 @@ class OAuthController {
             console.log(`Lodge an payment_initiation intent with the Bank\n${JSON.stringify(lodgeData, null, 2)}\n`);
         } else {
             lodgeData = {
-                "type": "merchant_auth",
+                "type": "payment_initiation",
                 "actions": [
                     "initiate",
                     "status",
@@ -254,7 +254,7 @@ class OAuthController {
                 "locations": [
                     "https://example.com/payments"
                 ],
-                "creditorName": "JKE eShop",
+                "creditorName": "TrustMe Shop",
                 "creditorAccount": {
                     "iban": "DE02100100109307118603"
                 }
