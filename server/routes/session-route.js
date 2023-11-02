@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/',  (req, res) => {
     if (OAuthController.isTransactionComplete(req)) {
         console.log("[DEBUG] Transaction complete")
-        res.redirect('/users');
+        res.render('payment', {title: 'Verify OIDC Demo', signupEnabled: false, signupLink: config.signupLink })
     } else if (OAuthController.isLoggedIn(req)) {
         console.log("[DEBUG] Logged in")
         res.render('payment', {title: 'Verify OIDC Demo', signupEnabled: false, signupLink: config.signupLink })

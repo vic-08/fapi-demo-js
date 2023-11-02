@@ -178,6 +178,9 @@ class OAuthController {
         if (!targetUrl || targetUrl == "") {
             targetUrl = "/";
         }
+        if (isPay) {
+            targetUrl = "/users";
+        }
 
         // redirect to authenticated page
         res.redirect(targetUrl);
